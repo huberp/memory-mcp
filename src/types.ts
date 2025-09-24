@@ -9,13 +9,12 @@ export interface Memory {
   timestamp: Date;
   llm: string;
   userId?: string;
-  // Context window caching fields
   conversationId?: string;
   contextType?: ContextType;
-  relevanceScore?: number; // 0-1
+  relevanceScore?: number;
   tags?: string[];
-  parentContextId?: ObjectId; // Reference to original content for summaries
-  messageIndex?: number; // Order within conversation
+  parentContextId?: ObjectId;
+  messageIndex?: number;
   wordCount?: number;
   summaryText?: string;
 }
@@ -45,57 +44,6 @@ export interface RetrievalDecision {
   reason: string;
 }
 
-// MCP Tool parameter types
-export interface SaveMemoriesParams {
-  memories: string[];
-  llm: string;
-  userId?: string;
-}
-
-export interface AddMemoriesParams {
-  memories: string[];
-  llm: string;
-  userId?: string;
-}
-
-export interface ArchiveContextParams {
-  conversationId: string;
-  contextMessages: string[];
-  tags: string[];
-  llm: string;
-  userId?: string;
-}
-
-export interface RetrieveContextParams {
-  conversationId: string;
-  tags?: string[];
-  minRelevanceScore?: number;
-  limit?: number;
-}
-
-export interface ScoreRelevanceParams {
-  conversationId: string;
-  currentContext: string;
-  llm: string;
-}
-
-export interface CreateSummaryParams {
-  conversationId: string;
-  contextItems: ContextItem[];
-  summaryText: string;
-  llm: string;
-  userId?: string;
-}
-
-export interface GetConversationSummariesParams {
-  conversationId: string;
-}
-
-export interface SearchContextByTagsParams {
-  tags: string[];
-}
-
-// Helper types for MCP tool parameters
 export interface ContextItem {
   _id?: string;
   memories: string[];
@@ -112,38 +60,12 @@ export interface ContextItem {
   summaryText?: string;
 }
 
-// Database configuration types
-export interface DatabaseConfig {
-  uri: string;
-  databaseName: string;
-  collectionName: string;
+export interface SharedMemory {
+  _id?: ObjectId;
+  memory: string;
+  timestamp: Date;
+  llm: string;
+  category?: string;
+  tags?: string[];
+  wordCount: number;
 }
-
-// Orchestrator configuration types
-export interface OrchestratorConfig {
-  maxWordCount: number;
-  archiveThreshold: number;
-  retrieveThreshold: number;
-  defaultMinRelevanceScore: number;
-  defaultRetrieveLimit: number;
-}
-
-// Response types
-export interface MCPResponse {
-  content: Array<{
-    type: "text";
-    text: string;
-  }>;
-}
-
-export interface ConversationStatus {
-  state: ConversationState;
-  recommendations: string[];
-}
-
-// Error types
-export interface MCPError {
-  message: string;
-  code?: string;
-  details?: any;
-} 
