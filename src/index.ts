@@ -51,12 +51,13 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
       return {
         content: [
           {
             type: "text",
-            text: `Error saving memories: ${error.message || "Unknown error"}`,
+            text: `Error saving memories: ${errorMessage}`,
           },
         ],
       };
@@ -105,12 +106,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error retrieving memories: ${error.message || "Unknown error"}`,
+            text: `Error retrieving memories: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -139,12 +140,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error adding memories: ${error.message || "Unknown error"}`,
+            text: `Error adding memories: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -169,12 +170,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error clearing memories: ${error.message || "Unknown error"}`,
+            text: `Error clearing memories: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -219,12 +220,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error archiving context: ${error.message || "Unknown error"}`,
+            text: `Error archiving context: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -297,12 +298,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error retrieving context: ${error.message || "Unknown error"}`,
+            text: `Error retrieving context: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -339,12 +340,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error scoring relevance: ${error.message || "Unknown error"}`,
+            text: `Error scoring relevance: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -417,12 +418,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error creating summary: ${error.message || "Unknown error"}`,
+            text: `Error creating summary: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -472,12 +473,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error retrieving summaries: ${error.message || "Unknown error"}`,
+            text: `Error retrieving summaries: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };
@@ -529,12 +530,12 @@ server.tool(
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text",
-            text: `Error searching context: ${error.message || "Unknown error"}`,
+            text: `Error searching context: ${error instanceof Error ? error.message : "Unknown error"}`,
           },
         ],
       };

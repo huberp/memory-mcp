@@ -1,15 +1,18 @@
 import { MongoClient, ObjectId, Db, Collection } from "mongodb";
 import { Memory, ContextType, ConversationState } from "./types.js";
+import { validateStringArray, validateTags, validateConversationId, sanitizeInput } from "./validation.js";
+import { config } from "./config.js";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const DATABASE_NAME = "memory_mcp";
-const COLLECTION_NAME = "memories";
-const STATE_COLLECTION_NAME = "conversation_states";
+const MONGODB_URI = config.mongodb.uri;
+const DATABASE_NAME = config.mongodb.database;
+const COLLECTION_NAME = config.mongodb.collection;
+const STATE_COLLECTION_NAME = config.mongodb.stateCollection;
 
 let client: MongoClient;
 let db: Db;
 let collection: Collection<Memory>;
 let stateCollection: Collection<any>;
+let connectionPromise: Promise<void> | null = null;
 
 function validateMongoUri(uri: string): void {
   if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -61,19 +64,38 @@ async function createIndexes() {
 export async function connect() {
   if (client && db && collection && stateCollection) return;
   
-  // Validate MongoDB URI before connecting
-  validateMongoUri(MONGODB_URI);
+  // Prevent race conditions - return existing connection attempt
+  if (connectionPromise) {
+    await connectionPromise;
+    return;
+  }
   
-  client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  db = client.db(DATABASE_NAME);
-  collection = db.collection(COLLECTION_NAME);
-  stateCollection = db.collection(STATE_COLLECTION_NAME);
+  connectionPromise = (async () => {
+    // Validate MongoDB URI before connecting
+    validateMongoUri(MONGODB_URI);
+    
+    // Configure connection with timeouts from config
+    const options = {
+      serverSelectionTimeoutMS: config.mongodb.serverSelectionTimeoutMS,
+      connectTimeoutMS: config.mongodb.connectTimeoutMS,
+      socketTimeoutMS: config.mongodb.socketTimeoutMS,
+    };
+    
+    client = new MongoClient(MONGODB_URI, options);
+    await client.connect();
+    db = client.db(DATABASE_NAME);
+    collection = db.collection(COLLECTION_NAME);
+    stateCollection = db.collection(STATE_COLLECTION_NAME);
+    
+    // Create indexes on first connection
+    await createIndexes();
+  })();
   
-  // Create indexes on first connection
-  await createIndexes();
-  
-  return collection;
+  try {
+    await connectionPromise;
+  } finally {
+    connectionPromise = null;
+  }
 }
 
 export async function saveMemories(
@@ -82,11 +104,16 @@ export async function saveMemories(
   userId?: string,
 ): Promise<void> {
   await connect();
+  
+  // Validate inputs
+  const validatedMemories = validateStringArray(memories);
+  const validatedLlm = sanitizeInput(llm, 100);
+  
   const memoryDoc: Memory = {
-    memories,
+    memories: validatedMemories,
     timestamp: new Date(),
-    llm,
-    userId,
+    llm: validatedLlm,
+    userId: userId ? sanitizeInput(userId, 256) : undefined,
   };
   await collection.insertOne(memoryDoc);
 }
@@ -115,14 +142,20 @@ export async function archiveContext(
 ): Promise<number> {
   await connect();
 
-  const archivedItems: Memory[] = contextMessages.map((message, index) => ({
+  // Validate inputs
+  const validatedConversationId = validateConversationId(conversationId);
+  const validatedMessages = validateStringArray(contextMessages);
+  const validatedTags = validateTags(tags);
+  const validatedLlm = sanitizeInput(llm, 100);
+
+  const archivedItems: Memory[] = validatedMessages.map((message, index) => ({
     memories: [message],
     timestamp: new Date(),
-    llm,
-    userId,
-    conversationId,
+    llm: validatedLlm,
+    userId: userId ? sanitizeInput(userId, 256) : undefined,
+    conversationId: validatedConversationId,
     contextType: "archived",
-    tags,
+    tags: validatedTags,
     messageIndex: index,
     wordCount: message.split(/\s+/).length,
   }));
@@ -149,11 +182,23 @@ export async function retrieveContext(
     filter.tags = { $in: tags };
   }
 
+  // Use projection to only fetch needed fields
   return collection
     .find(filter)
+    .project({
+      memories: 1,
+      timestamp: 1,
+      relevanceScore: 1,
+      tags: 1,
+      wordCount: 1,
+      llm: 1,
+      userId: 1,
+      conversationId: 1,
+      contextType: 1,
+    })
     .sort({ relevanceScore: -1, timestamp: -1 })
     .limit(limit)
-    .toArray();
+    .toArray() as Promise<Memory[]>;
 }
 
 export async function scoreRelevance(
@@ -252,22 +297,46 @@ export async function getConversationSummaries(
 ): Promise<Memory[]> {
   await connect();
 
+  // Use projection to only fetch needed fields for summaries
   return collection
     .find({ conversationId, contextType: "summary" })
+    .project({
+      summaryText: 1,
+      timestamp: 1,
+      wordCount: 1,
+      llm: 1,
+      userId: 1,
+      conversationId: 1,
+      contextType: 1,
+      memories: 1,
+    })
     .sort({ timestamp: -1 })
-    .toArray();
+    .toArray() as Promise<Memory[]>;
 }
 
 export async function searchContextByTags(tags: string[]): Promise<Memory[]> {
   await connect();
 
+  // Use projection to fetch only needed fields
   return collection
     .find({
       tags: { $in: tags },
       contextType: { $in: ["archived", "summary"] },
     })
+    .project({
+      memories: 1,
+      timestamp: 1,
+      relevanceScore: 1,
+      tags: 1,
+      wordCount: 1,
+      contextType: 1,
+      conversationId: 1,
+      summaryText: 1,
+      llm: 1,
+      userId: 1,
+    })
     .sort({ relevanceScore: -1, timestamp: -1 })
-    .toArray();
+    .toArray() as Promise<Memory[]>;
 }
 
 // Conversation state persistence functions
