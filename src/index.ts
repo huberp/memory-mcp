@@ -14,11 +14,13 @@ import {
   createSummary,
   getConversationSummaries,
   searchContextByTags,
+  checkDatabaseHealth,
 } from "./db.js";
 import {
   Memory,
   ContextItem,
 } from "./types.js";
+import { logger } from "./logger.js";
 
 const server = new McpServer({
   name: "memory-mcp",
@@ -543,31 +545,67 @@ server.tool(
   },
 );
 
+// Health check tool
+server.tool(
+  "health-check",
+  "Check the health status of the MCP server and database connection",
+  {},
+  async () => {
+    try {
+      const health = await checkDatabaseHealth();
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: health.status,
+            timestamp: health.timestamp,
+            database: health.database,
+            connected: health.connected,
+            version: "1.0.0",
+          }, null, 2),
+        }],
+      };
+    } catch (error: unknown) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: "unhealthy",
+            timestamp: new Date().toISOString(),
+            error: error instanceof Error ? error.message : "Unknown error",
+          }, null, 2),
+        }],
+      };
+    }
+  },
+);
+
 async function main() {
   try {
     await connect();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("Memory MCP server started successfully");
+    logger.info("Memory MCP server started successfully");
   } catch (error) {
-    console.error("Failed to start Memory MCP server:", error);
+    logger.error("Failed to start Memory MCP server:", error);
     process.exit(1);
   }
 }
 
 process.on("SIGINT", async () => {
-  console.error("Shutting down Memory MCP server...");
+  logger.info("Shutting down Memory MCP server...");
   await closeDatabase();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
-  console.error("Shutting down Memory MCP server...");
+  logger.info("Shutting down Memory MCP server...");
   await closeDatabase();
   process.exit(0);
 });
 
 main().catch((error) => {
-  console.error("Unhandled error:", error);
+  logger.error("Unhandled error:", error);
   process.exit(1);
 });

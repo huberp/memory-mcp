@@ -99,6 +99,22 @@ export async function connect() {
   }
 }
 
+/**
+ * Save memories to the database
+ * @param memories - Array of memory strings to save
+ * @param llm - Name of the LLM (e.g., 'chatgpt', 'claude')
+ * @param userId - Optional user identifier
+ * @throws {Error} If validation fails or database operation fails
+ * 
+ * @example
+ * ```typescript
+ * await saveMemories(
+ *   ['User asked about TypeScript', 'Explained types'],
+ *   'claude',
+ *   'user-123'
+ * );
+ * ```
+ */
 export async function saveMemories(
   memories: string[],
   llm: string,
@@ -119,21 +135,106 @@ export async function saveMemories(
   await collection.insertOne(memoryDoc);
 }
 
+/**
+ * Retrieve all memories from the database
+ * @returns Array of memory objects, sorted by timestamp (newest first)
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const memories = await getAllMemories();
+ * console.log(`Found ${memories.length} memories`);
+ * ```
+ */
 export async function getAllMemories(): Promise<Memory[]> {
   await connect();
   return collection.find({}).sort({ timestamp: -1 }).toArray();
 }
 
+/**
+ * Clear all memories from the database
+ * @returns The number of memory entries deleted
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const deletedCount = await clearAllMemories();
+ * console.log(`Deleted ${deletedCount} memories`);
+ * ```
+ */
 export async function clearAllMemories(): Promise<number> {
   await connect();
   const result = await collection.deleteMany({});
   return result.deletedCount || 0;
 }
 
+/**
+ * Close the database connection
+ * Should be called during application shutdown for proper cleanup
+ * 
+ * @example
+ * ```typescript
+ * process.on('SIGTERM', async () => {
+ *   await closeDatabase();
+ *   process.exit(0);
+ * });
+ * ```
+ */
 export async function closeDatabase() {
   if (client) await client.close();
 }
 
+/**
+ * Check database health and connectivity
+ * @returns Object containing health status and database info
+ * @throws {Error} If database connection or ping fails
+ * 
+ * @example
+ * ```typescript
+ * const health = await checkDatabaseHealth();
+ * console.log(`Database status: ${health.status}`);
+ * ```
+ */
+export async function checkDatabaseHealth(): Promise<{
+  status: string;
+  timestamp: string;
+  database: string;
+  connected: boolean;
+}> {
+  await connect();
+  
+  // Test database connection with ping
+  const pingResult = await db.admin().ping();
+  
+  return {
+    status: pingResult.ok === 1 ? 'healthy' : 'unhealthy',
+    timestamp: new Date().toISOString(),
+    database: 'connected',
+    connected: client && client.topology ? client.topology.isConnected() : false,
+  };
+}
+
+/**
+ * Archive context messages for a conversation with tags and metadata
+ * @param conversationId - Unique identifier for the conversation
+ * @param contextMessages - Array of context messages to archive
+ * @param tags - Tags for categorizing the archived content
+ * @param llm - Name of the LLM (e.g., 'chatgpt', 'claude')
+ * @param userId - Optional user identifier
+ * @returns The number of items archived
+ * @throws {Error} If validation fails or database operation fails
+ * 
+ * @example
+ * ```typescript
+ * const count = await archiveContext(
+ *   'conv-123',
+ *   ['Hello', 'How are you?'],
+ *   ['greeting', 'casual'],
+ *   'claude'
+ * );
+ * console.log(`Archived ${count} messages`);
+ * ```
+ */
 export async function archiveContext(
   conversationId: string,
   contextMessages: string[],
@@ -165,6 +266,26 @@ export async function archiveContext(
   return result.insertedCount || 0;
 }
 
+/**
+ * Retrieve relevant archived context for a conversation
+ * @param conversationId - Unique identifier for the conversation
+ * @param tags - Optional tags to filter archived content by
+ * @param minRelevanceScore - Minimum relevance score (0-1), defaults to 0.1
+ * @param limit - Maximum number of items to return, defaults to 10
+ * @returns Array of archived context items sorted by relevance score
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const relevantContext = await retrieveContext(
+ *   'conv-123',
+ *   ['technical', 'api'],
+ *   0.5,
+ *   5
+ * );
+ * console.log(`Found ${relevantContext.length} relevant items`);
+ * ```
+ */
 export async function retrieveContext(
   conversationId: string,
   tags?: string[],
@@ -202,6 +323,25 @@ export async function retrieveContext(
     .toArray() as Promise<Memory[]>;
 }
 
+/**
+ * Score the relevance of archived context against current conversation context
+ * Uses Jaccard similarity (word overlap) to calculate relevance scores
+ * @param conversationId - Unique identifier for the conversation
+ * @param currentContext - Current conversation context to compare against
+ * @param llm - Name of the LLM
+ * @returns The number of archived items scored
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const scoredCount = await scoreRelevance(
+ *   'conv-123',
+ *   'discussing API design patterns',
+ *   'claude'
+ * );
+ * console.log(`Scored ${scoredCount} archived items`);
+ * ```
+ */
 export async function scoreRelevance(
   conversationId: string,
   currentContext: string,
@@ -249,6 +389,28 @@ export async function scoreRelevance(
   return bulkOps.length;
 }
 
+/**
+ * Create a summary of context items and link them to the summary
+ * @param conversationId - Unique identifier for the conversation
+ * @param contextItems - Array of context items to summarize
+ * @param summaryText - Human-provided summary text
+ * @param llm - Name of the LLM
+ * @param userId - Optional user identifier
+ * @returns The ObjectId of the created summary
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const summaryId = await createSummary(
+ *   'conv-123',
+ *   archivedItems,
+ *   'Discussed TypeScript types and interfaces',
+ *   'claude',
+ *   'user-123'
+ * );
+ * console.log(`Created summary ${summaryId}`);
+ * ```
+ */
 export async function createSummary(
   conversationId: string,
   contextItems: Memory[],
