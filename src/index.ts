@@ -19,6 +19,7 @@ import {
   Memory,
   ContextItem,
 } from "./types.js";
+import { writeRateLimiter, readRateLimiter } from "./ratelimiter.js";
 
 const server = new McpServer({
   name: "memory-mcp",
@@ -39,6 +40,19 @@ server.tool(
     userId: z.string().optional().describe("Optional user identifier"),
   },
   async ({ memories, llm, userId }) => {
+    const rateLimitKey = userId || llm;
+    
+    if (!writeRateLimiter.isAllowed(rateLimitKey)) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Rate limit exceeded. Please try again later.",
+          },
+        ],
+      };
+    }
+    
     try {
       await connect();
       await clearAllMemories();
@@ -128,6 +142,19 @@ server.tool(
     userId: z.string().optional().describe("Optional user identifier"),
   },
   async ({ memories, llm, userId }) => {
+    const rateLimitKey = userId || llm;
+    
+    if (!writeRateLimiter.isAllowed(rateLimitKey)) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Rate limit exceeded. Please try again later.",
+          },
+        ],
+      };
+    }
+    
     try {
       await connect();
       await saveMemories(memories, llm, userId);
@@ -202,6 +229,19 @@ server.tool(
     userId: z.string().optional().describe("Optional user identifier"),
   },
   async ({ conversationId, contextMessages, tags, llm, userId }) => {
+    const rateLimitKey = userId || llm;
+    
+    if (!writeRateLimiter.isAllowed(rateLimitKey)) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Rate limit exceeded. Please try again later.",
+          },
+        ],
+      };
+    }
+    
     try {
       await connect();
       const archivedCount = await archiveContext(
