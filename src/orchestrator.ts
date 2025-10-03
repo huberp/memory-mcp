@@ -174,28 +174,40 @@ export class ConversationOrchestrator {
   async executeArchive(decision: ArchiveDecision, state: ConversationState): Promise<void> {
     if (!decision.shouldArchive) return;
 
-    // Archive the messages
-    const archivedCount = await archiveContext(
-      state.conversationId,
-      decision.messagesToArchive,
-      decision.tags,
-      state.llm,
-      state.userId,
-    );
+    // Store original state for rollback
+    const originalContext = [...state.currentContext];
+    const originalWordCount = state.totalWordCount;
 
-    // Remove archived messages from current context
-    const archivedWordCount = decision.messagesToArchive.reduce(
-      (sum, msg) => sum + this.getWordCount(msg),
-      0,
-    );
+    try {
+      // Archive the messages
+      const archivedCount = await archiveContext(
+        state.conversationId,
+        decision.messagesToArchive,
+        decision.tags,
+        state.llm,
+        state.userId,
+      );
 
-    state.currentContext = state.currentContext.slice(decision.messagesToArchive.length);
-    state.totalWordCount -= archivedWordCount;
+      // Remove archived messages from current context
+      const archivedWordCount = decision.messagesToArchive.reduce(
+        (sum, msg) => sum + this.getWordCount(msg),
+        0,
+      );
 
-    // Save updated state to database
-    await saveConversationState(state);
+      state.currentContext = state.currentContext.slice(decision.messagesToArchive.length);
+      state.totalWordCount -= archivedWordCount;
 
-    console.log(`Archived ${archivedCount} messages for conversation ${state.conversationId}`);
+      // Save updated state to database
+      await saveConversationState(state);
+
+      console.log(`Archived ${archivedCount} messages for conversation ${state.conversationId}`);
+    } catch (error) {
+      // Rollback state on failure
+      state.currentContext = originalContext;
+      state.totalWordCount = originalWordCount;
+      console.error(`Failed to archive messages for conversation ${state.conversationId}:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -204,17 +216,29 @@ export class ConversationOrchestrator {
   async executeRetrieval(decision: RetrievalDecision, state: ConversationState): Promise<void> {
     if (!decision.shouldRetrieve) return;
 
-    // Add retrieved context to current context
-    for (const item of decision.contextToRetrieve) {
-      const content = item.memories.join(" ");
-      state.currentContext.unshift(content); // Add to beginning
-      state.totalWordCount += this.getWordCount(content);
+    // Store original state for rollback
+    const originalContext = [...state.currentContext];
+    const originalWordCount = state.totalWordCount;
+
+    try {
+      // Add retrieved context to current context
+      for (const item of decision.contextToRetrieve) {
+        const content = item.memories.join(" ");
+        state.currentContext.unshift(content); // Add to beginning
+        state.totalWordCount += this.getWordCount(content);
+      }
+
+      // Save updated state to database
+      await saveConversationState(state);
+
+      console.log(`Retrieved ${decision.contextToRetrieve.length} items for conversation ${state.conversationId}`);
+    } catch (error) {
+      // Rollback state on failure
+      state.currentContext = originalContext;
+      state.totalWordCount = originalWordCount;
+      console.error(`Failed to retrieve context for conversation ${state.conversationId}:`, error);
+      throw error;
     }
-
-    // Save updated state to database
-    await saveConversationState(state);
-
-    console.log(`Retrieved ${decision.contextToRetrieve.length} items for conversation ${state.conversationId}`);
   }
 
   /**

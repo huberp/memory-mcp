@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId, Db, Collection } from "mongodb";
 import { Memory, ContextType, ConversationState } from "./types.js";
+import { validateStringArray, validateTags, validateConversationId, sanitizeInput } from "./validation.js";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const DATABASE_NAME = "memory_mcp";
@@ -10,6 +11,7 @@ let client: MongoClient;
 let db: Db;
 let collection: Collection<Memory>;
 let stateCollection: Collection<any>;
+let connectionPromise: Promise<void> | null = null;
 
 function validateMongoUri(uri: string): void {
   if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -61,19 +63,38 @@ async function createIndexes() {
 export async function connect() {
   if (client && db && collection && stateCollection) return;
   
-  // Validate MongoDB URI before connecting
-  validateMongoUri(MONGODB_URI);
+  // Prevent race conditions - return existing connection attempt
+  if (connectionPromise) {
+    await connectionPromise;
+    return;
+  }
   
-  client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  db = client.db(DATABASE_NAME);
-  collection = db.collection(COLLECTION_NAME);
-  stateCollection = db.collection(STATE_COLLECTION_NAME);
+  connectionPromise = (async () => {
+    // Validate MongoDB URI before connecting
+    validateMongoUri(MONGODB_URI);
+    
+    // Configure connection with timeouts
+    const options = {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+    };
+    
+    client = new MongoClient(MONGODB_URI, options);
+    await client.connect();
+    db = client.db(DATABASE_NAME);
+    collection = db.collection(COLLECTION_NAME);
+    stateCollection = db.collection(STATE_COLLECTION_NAME);
+    
+    // Create indexes on first connection
+    await createIndexes();
+  })();
   
-  // Create indexes on first connection
-  await createIndexes();
-  
-  return collection;
+  try {
+    await connectionPromise;
+  } finally {
+    connectionPromise = null;
+  }
 }
 
 export async function saveMemories(
@@ -82,11 +103,16 @@ export async function saveMemories(
   userId?: string,
 ): Promise<void> {
   await connect();
+  
+  // Validate inputs
+  const validatedMemories = validateStringArray(memories);
+  const validatedLlm = sanitizeInput(llm, 100);
+  
   const memoryDoc: Memory = {
-    memories,
+    memories: validatedMemories,
     timestamp: new Date(),
-    llm,
-    userId,
+    llm: validatedLlm,
+    userId: userId ? sanitizeInput(userId, 256) : undefined,
   };
   await collection.insertOne(memoryDoc);
 }
@@ -115,14 +141,20 @@ export async function archiveContext(
 ): Promise<number> {
   await connect();
 
-  const archivedItems: Memory[] = contextMessages.map((message, index) => ({
+  // Validate inputs
+  const validatedConversationId = validateConversationId(conversationId);
+  const validatedMessages = validateStringArray(contextMessages);
+  const validatedTags = validateTags(tags);
+  const validatedLlm = sanitizeInput(llm, 100);
+
+  const archivedItems: Memory[] = validatedMessages.map((message, index) => ({
     memories: [message],
     timestamp: new Date(),
-    llm,
-    userId,
-    conversationId,
+    llm: validatedLlm,
+    userId: userId ? sanitizeInput(userId, 256) : undefined,
+    conversationId: validatedConversationId,
     contextType: "archived",
-    tags,
+    tags: validatedTags,
     messageIndex: index,
     wordCount: message.split(/\s+/).length,
   }));

@@ -146,4 +146,32 @@ export interface MCPError {
   message: string;
   code?: string;
   details?: any;
+}
+
+/**
+ * Custom error class for MCP tool errors
+ */
+export class MCPToolError extends Error {
+  constructor(
+    message: string,
+    public readonly tool: string,
+    public readonly details?: unknown
+  ) {
+    super(message);
+    this.name = 'MCPToolError';
+  }
+}
+
+/**
+ * Custom error class for database errors
+ */
+export class DatabaseError extends Error {
+  constructor(
+    message: string,
+    public readonly operation: string,
+    public readonly details?: unknown
+  ) {
+    super(message);
+    this.name = 'DatabaseError';
+  }
 } 
