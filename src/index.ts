@@ -542,6 +542,42 @@ server.tool(
   },
 );
 
+// Tool to check server health
+server.tool(
+  "health-check",
+  "Check the health status of the MCP server and database connection",
+  {},
+  async () => {
+    try {
+      await connect();
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: "healthy",
+            timestamp: new Date().toISOString(),
+            database: "connected",
+            version: "1.0.0"
+          }, null, 2),
+        }],
+      };
+    } catch (error: any) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: "unhealthy",
+            timestamp: new Date().toISOString(),
+            database: "disconnected",
+            error: error.message,
+          }, null, 2),
+        }],
+      };
+    }
+  }
+);
+
 async function main() {
   try {
     await connect();

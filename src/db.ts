@@ -48,6 +48,28 @@ export async function closeDatabase() {
   if (client) await client.close();
 }
 
+/**
+ * Archives context messages for a conversation with tags and metadata.
+ * 
+ * @param conversationId - Unique identifier for the conversation
+ * @param contextMessages - Array of context messages to archive
+ * @param tags - Tags for categorizing the archived content
+ * @param llm - Name of the LLM (e.g., 'chatgpt', 'claude')
+ * @param userId - Optional user identifier
+ * @returns The number of items archived
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const count = await archiveContext(
+ *   'conv-123',
+ *   ['Hello', 'How are you?'],
+ *   ['greeting', 'casual'],
+ *   'claude'
+ * );
+ * console.log(`Archived ${count} messages`);
+ * ```
+ */
 export async function archiveContext(
   conversationId: string,
   contextMessages: string[],
@@ -73,6 +95,27 @@ export async function archiveContext(
   return result.insertedCount || 0;
 }
 
+/**
+ * Retrieves relevant archived context for a conversation.
+ * 
+ * @param conversationId - Unique identifier for the conversation
+ * @param tags - Optional array of tags to filter by
+ * @param minRelevanceScore - Minimum relevance score (0-1) for returned items
+ * @param limit - Maximum number of items to return
+ * @returns Array of archived memory items matching the criteria
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const items = await retrieveContext(
+ *   'conv-123',
+ *   ['technical', 'programming'],
+ *   0.2,
+ *   10
+ * );
+ * console.log(`Retrieved ${items.length} relevant items`);
+ * ```
+ */
 export async function retrieveContext(
   conversationId: string,
   tags?: string[],
@@ -98,6 +141,26 @@ export async function retrieveContext(
     .toArray();
 }
 
+/**
+ * Scores the relevance of archived items against current context.
+ * Uses keyword overlap to calculate relevance scores.
+ * 
+ * @param conversationId - Unique identifier for the conversation
+ * @param currentContext - Current conversation context to compare against
+ * @param llm - Name of the LLM (e.g., 'chatgpt', 'claude')
+ * @returns The number of archived items scored
+ * @throws {Error} If database connection fails
+ * 
+ * @example
+ * ```typescript
+ * const count = await scoreRelevance(
+ *   'conv-123',
+ *   'User is asking about database performance',
+ *   'claude'
+ * );
+ * console.log(`Scored ${count} archived items`);
+ * ```
+ */
 export async function scoreRelevance(
   conversationId: string,
   currentContext: string,

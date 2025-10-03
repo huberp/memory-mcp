@@ -131,7 +131,20 @@ export class ConversationOrchestrator {
   }
 
   /**
-   * Execute archiving decision
+   * Execute archiving decision by moving messages from current context to archive.
+   * Updates the conversation state after successful archiving.
+   * 
+   * @param decision - The archiving decision with messages to archive
+   * @param state - Current conversation state to update
+   * @throws {Error} If database archiving fails
+   * 
+   * @example
+   * ```typescript
+   * const decision = await orchestrator.shouldArchive(state);
+   * if (decision.shouldArchive) {
+   *   await orchestrator.executeArchive(decision, state);
+   * }
+   * ```
    */
   async executeArchive(decision: ArchiveDecision, state: ConversationState): Promise<void> {
     if (!decision.shouldArchive) return;
@@ -158,7 +171,19 @@ export class ConversationOrchestrator {
   }
 
   /**
-   * Execute retrieval decision
+   * Execute retrieval decision by adding relevant archived content to current context.
+   * Updates the conversation state with retrieved content.
+   * 
+   * @param decision - The retrieval decision with content to retrieve
+   * @param state - Current conversation state to update
+   * 
+   * @example
+   * ```typescript
+   * const decision = await orchestrator.shouldRetrieve(state);
+   * if (decision.shouldRetrieve) {
+   *   await orchestrator.executeRetrieval(decision, state);
+   * }
+   * ```
    */
   async executeRetrieval(decision: RetrievalDecision, state: ConversationState): Promise<void> {
     if (!decision.shouldRetrieve) return;
