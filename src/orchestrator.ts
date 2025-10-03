@@ -13,13 +13,8 @@ import {
   RetrievalDecision,
 } from "./types.js";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const DATABASE_NAME = "memory_mcp";
-const COLLECTION_NAME = "memories";
-
 export class ConversationOrchestrator {
   private conversations: Map<string, ConversationState> = new Map();
-  private readonly DEFAULT_MAX_WORDS = 8000; // Conservative limit
   private readonly ARCHIVE_THRESHOLD = 0.8; // Archive when 80% full
   private readonly RETRIEVE_THRESHOLD = 0.3; // Retrieve when 30% full
 
@@ -244,24 +239,22 @@ export class ConversationOrchestrator {
     const allText = messages.join(" ").toLowerCase();
     const tags: string[] = [];
 
-    // Simple keyword-based tagging
-    const keywords = [
-      "code", "programming", "technical", "api", "database", "frontend", "backend",
-      "design", "ui", "ux", "user", "interface", "data", "analysis", "research",
-      "writing", "content", "creative", "business", "strategy", "planning",
-    ];
+    // Use word boundaries for better matching
+    const keywords = {
+      programming: /\b(code|coding|programming|developer|software)\b/,
+      technical: /\b(technical|api|database|server|client)\b/,
+      frontend: /\b(frontend|ui|ux|interface|design)\b/,
+      backend: /\b(backend|server|database|api)\b/,
+      data: /\b(data|analysis|analytics|research)\b/,
+      writing: /\b(writing|content|creative|documentation)\b/,
+      business: /\b(business|strategy|planning|management)\b/,
+    };
 
-    for (const keyword of keywords) {
-      if (allText.includes(keyword)) {
-        tags.push(keyword);
+    for (const [tag, pattern] of Object.entries(keywords)) {
+      if (pattern.test(allText)) {
+        tags.push(tag);
       }
     }
-
-    // Add timestamp-based tag
-    const hour = new Date().getHours();
-    if (hour < 12) tags.push("morning");
-    else if (hour < 18) tags.push("afternoon");
-    else tags.push("evening");
 
     return tags.length > 0 ? tags : ["general"];
   }

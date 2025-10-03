@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { ConversationOrchestrator } from "./orchestrator.js";
-import { connect } from "./db.js";
+import { connect, closeDatabase } from "./db.js";
 import readline from "readline";
 
 const rl = readline.createInterface({
@@ -29,7 +29,7 @@ class ConversationCLI {
     this.promptUser();
   }
 
-  private showHelp() {
+  private showHelp(): void {
     console.log("Available commands:");
     console.log("  add <message>     - Add a message to the conversation");
     console.log("  status            - Show conversation status and recommendations");
@@ -43,7 +43,7 @@ class ConversationCLI {
     console.log("");
   }
 
-  private promptUser() {
+  private promptUser(): void {
     rl.question(`[${this.currentConversationId}] > `, async (input) => {
       const parts = input.trim().split(" ");
       const command = parts[0].toLowerCase();
@@ -91,7 +91,7 @@ class ConversationCLI {
     });
   }
 
-  private async handleAdd(message: string) {
+  private async handleAdd(message: string): Promise<void> {
     if (!message) {
       console.log("❌ Please provide a message to add");
       return;
@@ -122,7 +122,7 @@ class ConversationCLI {
     }
   }
 
-  private async handleStatus() {
+  private async handleStatus(): Promise<void> {
     const status = await this.orchestrator.getConversationStatus(this.currentConversationId);
     const usageRatio = status.state.totalWordCount / status.state.maxWordCount;
     
@@ -139,7 +139,7 @@ class ConversationCLI {
     console.log("");
   }
 
-  private async handleArchive() {
+  private async handleArchive(): Promise<void> {
     const state = await this.orchestrator.initializeConversation(this.currentConversationId, this.llm);
     const decision = await this.orchestrator["shouldArchive"](state);
     
@@ -151,7 +151,7 @@ class ConversationCLI {
     }
   }
 
-  private async handleRetrieve() {
+  private async handleRetrieve(): Promise<void> {
     const state = await this.orchestrator.initializeConversation(this.currentConversationId, this.llm);
     const decision = await this.orchestrator["shouldRetrieve"](state);
     
@@ -163,7 +163,7 @@ class ConversationCLI {
     }
   }
 
-  private async handleSummary(summaryText: string) {
+  private async handleSummary(summaryText: string): Promise<void> {
     if (!summaryText) {
       console.log("❌ Please provide summary text");
       return;
@@ -181,7 +181,7 @@ class ConversationCLI {
     }
   }
 
-  private async handleList() {
+  private async handleList(): Promise<void> {
     const conversations = this.orchestrator.getActiveConversations();
     if (conversations.length === 0) {
       console.log("📝 No active conversations");
@@ -194,7 +194,7 @@ class ConversationCLI {
     }
   }
 
-  private async handleSwitch(conversationId: string) {
+  private async handleSwitch(conversationId: string): Promise<void> {
     if (!conversationId) {
       console.log("❌ Please provide a conversation ID");
       return;
@@ -209,3 +209,22 @@ class ConversationCLI {
 // Start the CLI
 const cli = new ConversationCLI();
 cli.start().catch(console.error);
+
+// Handle graceful shutdown on readline close
+rl.on('close', async () => {
+  console.log('\n👋 Goodbye!');
+  await closeDatabase();
+  process.exit(0);
+});
+
+// Handle SIGINT (Ctrl+C)
+process.on('SIGINT', async () => {
+  console.log('\n\n⚠️  Shutting down gracefully...');
+  rl.close();
+});
+
+// Handle SIGTERM
+process.on('SIGTERM', async () => {
+  console.log('\n\n⚠️  Shutting down gracefully...');
+  rl.close();
+});
