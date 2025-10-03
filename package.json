@@ -9,7 +9,10 @@
   "scripts": {
     "build": "tsc && chmod 755 build/index.js build/cli.js",
     "start": "node build/index.js",
-    "cli": "node build/cli.js"
+    "cli": "node build/cli.js",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "files": [
     "build"
@@ -25,7 +28,10 @@
     "zod": "^3.25.75"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.0.10",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.4",
     "typescript": "^5.8.3"
   }
 }

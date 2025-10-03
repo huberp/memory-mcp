@@ -1,20 +1,78 @@
 import { MongoClient, ObjectId, Db, Collection } from "mongodb";
-import { Memory, ContextType } from "./types.js";
+import { Memory, ContextType, ConversationState } from "./types.js";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const DATABASE_NAME = "memory_mcp";
 const COLLECTION_NAME = "memories";
+const STATE_COLLECTION_NAME = "conversation_states";
 
 let client: MongoClient;
 let db: Db;
 let collection: Collection<Memory>;
+let stateCollection: Collection<any>;
+
+function validateMongoUri(uri: string): void {
+  if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+    throw new Error('Invalid MongoDB connection string format');
+  }
+  // Warn if using default insecure connection
+  if (uri === 'mongodb://localhost:27017') {
+    console.warn('⚠️  Using default MongoDB connection without authentication');
+  }
+}
+
+async function createIndexes() {
+  if (!collection) return;
+  
+  // Compound index for common query patterns
+  await collection.createIndex(
+    { conversationId: 1, contextType: 1, relevanceScore: -1 },
+    { background: true }
+  );
+  
+  // Index for tag searches
+  await collection.createIndex(
+    { tags: 1, contextType: 1 },
+    { background: true }
+  );
+  
+  // Index for timestamp sorting
+  await collection.createIndex(
+    { timestamp: -1 },
+    { background: true }
+  );
+  
+  // Create indexes for conversation states collection
+  if (stateCollection) {
+    await stateCollection.createIndex(
+      { conversationId: 1 },
+      { unique: true, background: true }
+    );
+    
+    await stateCollection.createIndex(
+      { lastUpdated: -1 },
+      { background: true }
+    );
+  }
+  
+  console.error('✅ Database indexes created');
+}
 
 export async function connect() {
-  if (client && db && collection) return;
+  if (client && db && collection && stateCollection) return;
+  
+  // Validate MongoDB URI before connecting
+  validateMongoUri(MONGODB_URI);
+  
   client = new MongoClient(MONGODB_URI);
   await client.connect();
   db = client.db(DATABASE_NAME);
   collection = db.collection(COLLECTION_NAME);
+  stateCollection = db.collection(STATE_COLLECTION_NAME);
+  
+  // Create indexes on first connection
+  await createIndexes();
+  
   return collection;
 }
 
@@ -114,7 +172,7 @@ export async function scoreRelevance(
 
   // Simple keyword overlap scoring
   const currentWords = new Set(currentContext.toLowerCase().split(/\s+/));
-  let scoredCount = 0;
+  const bulkOps = [];
 
   for (const item of archivedItems) {
     const itemText = item.memories.join(" ");
@@ -128,13 +186,21 @@ export async function scoreRelevance(
 
     const relevanceScore = intersection.size / union.size;
 
-    // Update the item with new relevance score
-    await collection.updateOne({ _id: item._id }, { $set: { relevanceScore } });
-
-    scoredCount++;
+    // Queue update instead of executing immediately
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: item._id },
+        update: { $set: { relevanceScore } }
+      }
+    });
   }
 
-  return scoredCount;
+  // Execute all updates in a single batch
+  if (bulkOps.length > 0) {
+    await collection.bulkWrite(bulkOps);
+  }
+
+  return bulkOps.length;
 }
 
 export async function createSummary(
@@ -202,6 +268,63 @@ export async function searchContextByTags(tags: string[]): Promise<Memory[]> {
     })
     .sort({ relevanceScore: -1, timestamp: -1 })
     .toArray();
+}
+
+// Conversation state persistence functions
+export async function saveConversationState(state: ConversationState): Promise<void> {
+  await connect();
+
+  const stateDoc = {
+    conversationId: state.conversationId,
+    currentContext: state.currentContext,
+    totalWordCount: state.totalWordCount,
+    maxWordCount: state.maxWordCount,
+    llm: state.llm,
+    userId: state.userId,
+    lastUpdated: new Date(),
+  };
+
+  await stateCollection.updateOne(
+    { conversationId: state.conversationId },
+    { $set: stateDoc },
+    { upsert: true }
+  );
+}
+
+export async function getConversationState(conversationId: string): Promise<ConversationState | null> {
+  await connect();
+
+  const stateDoc = await stateCollection.findOne({ conversationId });
+  
+  if (!stateDoc) return null;
+
+  // Load archived context and summaries from memories collection
+  const archivedContext = await collection
+    .find({ conversationId, contextType: "archived" })
+    .sort({ timestamp: -1 })
+    .toArray();
+
+  const summaries = await collection
+    .find({ conversationId, contextType: "summary" })
+    .sort({ timestamp: -1 })
+    .toArray();
+
+  return {
+    conversationId: stateDoc.conversationId,
+    currentContext: stateDoc.currentContext || [],
+    archivedContext,
+    summaries,
+    totalWordCount: stateDoc.totalWordCount || 0,
+    maxWordCount: stateDoc.maxWordCount,
+    llm: stateDoc.llm,
+    userId: stateDoc.userId,
+  };
+}
+
+export async function deleteConversationState(conversationId: string): Promise<void> {
+  await connect();
+
+  await stateCollection.deleteOne({ conversationId });
 }
 
 // Re-export types for convenience
