@@ -2,6 +2,7 @@ import { MongoClient, ObjectId, Db, Collection } from "mongodb";
 import { Memory, ContextType, ConversationState } from "./types.js";
 import { validateStringArray, validateTags, validateConversationId, sanitizeInput } from "./validation.js";
 import { config } from "./config.js";
+import { logger } from "./logger.js";
 
 const MONGODB_URI = config.mongodb.uri;
 const DATABASE_NAME = config.mongodb.database;
@@ -20,7 +21,7 @@ function validateMongoUri(uri: string): void {
   }
   // Warn if using default insecure connection
   if (uri === 'mongodb://localhost:27017') {
-    console.warn('⚠️  Using default MongoDB connection without authentication');
+    logger.warn('Using default MongoDB connection without authentication');
   }
 }
 
@@ -58,7 +59,7 @@ async function createIndexes() {
     );
   }
   
-  console.error('✅ Database indexes created');
+  logger.info('Database indexes created');
 }
 
 export async function connect() {
