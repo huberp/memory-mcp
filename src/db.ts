@@ -1,13 +1,15 @@
 import { MongoClient, ObjectId, Db, Collection } from "mongodb";
-import { Memory, ContextType } from "./types.js";
+import { Memory, ContextType, ConversationState } from "./types.js";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const DATABASE_NAME = "memory_mcp";
 const COLLECTION_NAME = "memories";
+const STATE_COLLECTION_NAME = "conversation_states";
 
 let client: MongoClient;
 let db: Db;
 let collection: Collection<Memory>;
+let stateCollection: Collection<any>;
 
 function validateMongoUri(uri: string): void {
   if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -40,11 +42,24 @@ async function createIndexes() {
     { background: true }
   );
   
+  // Create indexes for conversation states collection
+  if (stateCollection) {
+    await stateCollection.createIndex(
+      { conversationId: 1 },
+      { unique: true, background: true }
+    );
+    
+    await stateCollection.createIndex(
+      { lastUpdated: -1 },
+      { background: true }
+    );
+  }
+  
   console.error('✅ Database indexes created');
 }
 
 export async function connect() {
-  if (client && db && collection) return;
+  if (client && db && collection && stateCollection) return;
   
   // Validate MongoDB URI before connecting
   validateMongoUri(MONGODB_URI);
@@ -53,6 +68,7 @@ export async function connect() {
   await client.connect();
   db = client.db(DATABASE_NAME);
   collection = db.collection(COLLECTION_NAME);
+  stateCollection = db.collection(STATE_COLLECTION_NAME);
   
   // Create indexes on first connection
   await createIndexes();
@@ -252,6 +268,63 @@ export async function searchContextByTags(tags: string[]): Promise<Memory[]> {
     })
     .sort({ relevanceScore: -1, timestamp: -1 })
     .toArray();
+}
+
+// Conversation state persistence functions
+export async function saveConversationState(state: ConversationState): Promise<void> {
+  await connect();
+
+  const stateDoc = {
+    conversationId: state.conversationId,
+    currentContext: state.currentContext,
+    totalWordCount: state.totalWordCount,
+    maxWordCount: state.maxWordCount,
+    llm: state.llm,
+    userId: state.userId,
+    lastUpdated: new Date(),
+  };
+
+  await stateCollection.updateOne(
+    { conversationId: state.conversationId },
+    { $set: stateDoc },
+    { upsert: true }
+  );
+}
+
+export async function getConversationState(conversationId: string): Promise<ConversationState | null> {
+  await connect();
+
+  const stateDoc = await stateCollection.findOne({ conversationId });
+  
+  if (!stateDoc) return null;
+
+  // Load archived context and summaries from memories collection
+  const archivedContext = await collection
+    .find({ conversationId, contextType: "archived" })
+    .sort({ timestamp: -1 })
+    .toArray();
+
+  const summaries = await collection
+    .find({ conversationId, contextType: "summary" })
+    .sort({ timestamp: -1 })
+    .toArray();
+
+  return {
+    conversationId: stateDoc.conversationId,
+    currentContext: stateDoc.currentContext || [],
+    archivedContext,
+    summaries,
+    totalWordCount: stateDoc.totalWordCount || 0,
+    maxWordCount: stateDoc.maxWordCount,
+    llm: stateDoc.llm,
+    userId: stateDoc.userId,
+  };
+}
+
+export async function deleteConversationState(conversationId: string): Promise<void> {
+  await connect();
+
+  await stateCollection.deleteOne({ conversationId });
 }
 
 // Re-export types for convenience

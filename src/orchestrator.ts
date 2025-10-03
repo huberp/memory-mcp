@@ -5,6 +5,9 @@ import {
   scoreRelevance,
   createSummary,
   getConversationSummaries,
+  saveConversationState,
+  getConversationState,
+  deleteConversationState,
 } from "./db.js";
 import {
   Memory,
@@ -48,21 +51,35 @@ export class ConversationOrchestrator {
   ): Promise<ConversationState> {
     await connect();
 
-    if (!this.conversations.has(conversationId)) {
-      const state: ConversationState = {
-        conversationId,
-        currentContext: [],
-        archivedContext: [],
-        summaries: [],
-        totalWordCount: 0,
-        maxWordCount: this.maxWordCount,
-        llm,
-        userId,
-      };
-      this.conversations.set(conversationId, state);
+    // Try cache first
+    if (this.conversations.has(conversationId)) {
+      return this.conversations.get(conversationId)!;
     }
 
-    return this.conversations.get(conversationId)!;
+    // Try loading from database
+    const savedState = await getConversationState(conversationId);
+    
+    if (savedState) {
+      this.conversations.set(conversationId, savedState);
+      return savedState;
+    }
+
+    // Create new state
+    const state: ConversationState = {
+      conversationId,
+      currentContext: [],
+      archivedContext: [],
+      summaries: [],
+      totalWordCount: 0,
+      maxWordCount: this.maxWordCount,
+      llm,
+      userId,
+    };
+    
+    this.conversations.set(conversationId, state);
+    await saveConversationState(state);
+    
+    return state;
   }
 
   /**
@@ -83,6 +100,9 @@ export class ConversationOrchestrator {
     // Add message to current context
     state.currentContext.push(message);
     state.totalWordCount += this.getWordCount(message);
+
+    // Save state to database
+    await saveConversationState(state);
 
     // Check if we need to archive
     const archiveDecision = await this.shouldArchive(state);
@@ -172,6 +192,9 @@ export class ConversationOrchestrator {
     state.currentContext = state.currentContext.slice(decision.messagesToArchive.length);
     state.totalWordCount -= archivedWordCount;
 
+    // Save updated state to database
+    await saveConversationState(state);
+
     console.log(`Archived ${archivedCount} messages for conversation ${state.conversationId}`);
   }
 
@@ -187,6 +210,9 @@ export class ConversationOrchestrator {
       state.currentContext.unshift(content); // Add to beginning
       state.totalWordCount += this.getWordCount(content);
     }
+
+    // Save updated state to database
+    await saveConversationState(state);
 
     console.log(`Retrieved ${decision.contextToRetrieve.length} items for conversation ${state.conversationId}`);
   }
@@ -289,8 +315,9 @@ export class ConversationOrchestrator {
   /**
    * Clean up conversation state
    */
-  removeConversation(conversationId: string): void {
+  async removeConversation(conversationId: string): Promise<void> {
     this.conversations.delete(conversationId);
+    await deleteConversationState(conversationId);
   }
 
   /**

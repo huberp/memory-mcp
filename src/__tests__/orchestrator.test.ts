@@ -8,6 +8,9 @@ jest.unstable_mockModule('../db.js', () => ({
   scoreRelevance: jest.fn<() => Promise<number>>().mockResolvedValue(0),
   createSummary: jest.fn<() => Promise<any>>().mockResolvedValue({ toString: () => '123' }),
   getConversationSummaries: jest.fn<() => Promise<any[]>>().mockResolvedValue([]),
+  saveConversationState: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  getConversationState: jest.fn<() => Promise<any>>().mockResolvedValue(null),
+  deleteConversationState: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
 }));
 
 const { ConversationOrchestrator } = await import('../orchestrator.js');
@@ -149,9 +152,35 @@ describe('ConversationOrchestrator', () => {
       
       expect(orchestrator.getActiveConversations()).toContain('test-conversation');
       
-      orchestrator.removeConversation('test-conversation');
+      await orchestrator.removeConversation('test-conversation');
       
       expect(orchestrator.getActiveConversations()).not.toContain('test-conversation');
+    });
+  });
+
+  describe('state persistence', () => {
+    it('should load state from database on initialization', async () => {
+      // Mock getConversationState to return a saved state
+      const mockDb = await import('../db.js');
+      const getStateMock = mockDb.getConversationState as any;
+      
+      const savedState = {
+        conversationId: 'persisted-conv',
+        currentContext: ['message1', 'message2'],
+        archivedContext: [],
+        summaries: [],
+        totalWordCount: 4,
+        maxWordCount: 1000,
+        llm: 'claude',
+        userId: 'user-123'
+      };
+      
+      getStateMock.mockResolvedValueOnce(savedState);
+      
+      const state = await orchestrator.initializeConversation('persisted-conv', 'claude');
+      
+      expect(state.currentContext).toEqual(['message1', 'message2']);
+      expect(state.totalWordCount).toBe(4);
     });
   });
 });
