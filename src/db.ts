@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId, Db, Collection } from "mongodb";
 import { Memory, ContextType } from "./types.js";
+import { getWordCount } from "./wordcount.js";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const DATABASE_NAME = "memory_mcp";
@@ -88,7 +89,7 @@ export async function archiveContext(
     contextType: "archived",
     tags,
     messageIndex: index,
-    wordCount: message.split(/\s+/).length,
+    wordCount: getWordCount(message),
   }));
 
   const result = await collection.insertMany(archivedItems);
@@ -218,7 +219,7 @@ export async function createSummary(
     conversationId,
     contextType: "summary",
     summaryText,
-    wordCount: summaryText.split(/\s+/).length,
+    wordCount: getWordCount(summaryText),
   };
 
   const result = await collection.insertOne(summaryDoc);

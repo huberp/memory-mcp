@@ -12,6 +12,8 @@ import {
   ArchiveDecision,
   RetrievalDecision,
 } from "./types.js";
+import { logger } from "./logger.js";
+import { getWordCount } from "./wordcount.js";
 
 export class ConversationOrchestrator {
   private conversations: Map<string, ConversationState> = new Map();
@@ -64,7 +66,7 @@ export class ConversationOrchestrator {
 
     // Add message to current context
     state.currentContext.push(message);
-    state.totalWordCount += this.getWordCount(message);
+    state.totalWordCount += getWordCount(message);
 
     // Check if we need to archive
     const archiveDecision = await this.shouldArchive(state);
@@ -160,14 +162,14 @@ export class ConversationOrchestrator {
 
     // Remove archived messages from current context
     const archivedWordCount = decision.messagesToArchive.reduce(
-      (sum, msg) => sum + this.getWordCount(msg),
+      (sum, msg) => sum + getWordCount(msg),
       0,
     );
 
     state.currentContext = state.currentContext.slice(decision.messagesToArchive.length);
     state.totalWordCount -= archivedWordCount;
 
-    console.log(`Archived ${archivedCount} messages for conversation ${state.conversationId}`);
+    logger.info(`Archived ${archivedCount} messages for conversation ${state.conversationId}`);
   }
 
   /**
@@ -192,10 +194,10 @@ export class ConversationOrchestrator {
     for (const item of decision.contextToRetrieve) {
       const content = item.memories.join(" ");
       state.currentContext.unshift(content); // Add to beginning
-      state.totalWordCount += this.getWordCount(content);
+      state.totalWordCount += getWordCount(content);
     }
 
-    console.log(`Retrieved ${decision.contextToRetrieve.length} items for conversation ${state.conversationId}`);
+    logger.info(`Retrieved ${decision.contextToRetrieve.length} items for conversation ${state.conversationId}`);
   }
 
   /**
@@ -226,7 +228,7 @@ export class ConversationOrchestrator {
       userId,
     );
 
-    console.log(`Created summary ${summaryId} for conversation ${conversationId}`);
+    logger.info(`Created summary ${summaryId} for conversation ${conversationId}`);
   }
 
   /**
@@ -282,13 +284,6 @@ export class ConversationOrchestrator {
     }
 
     return tags.length > 0 ? tags : ["general"];
-  }
-
-  /**
-   * Get word count of text
-   */
-  private getWordCount(text: string): number {
-    return text.split(/\s+/).length;
   }
 
   /**
