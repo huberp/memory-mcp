@@ -128,6 +128,13 @@ class ConversationCLI {
 
   private async handleStatus() {
     const status = await this.orchestrator.getConversationStatus(this.currentConversationId);
+    
+    if (!status) {
+      console.log(`⚠️ No conversation found with ID: ${this.currentConversationId}`);
+      console.log("   Try adding a message first with 'add <message>'");
+      return;
+    }
+    
     const usageRatio = status.state.totalWordCount / status.state.maxWordCount;
     
     console.log(`\n📊 Conversation Status: ${this.currentConversationId}`);

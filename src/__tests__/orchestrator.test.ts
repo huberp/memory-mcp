@@ -107,9 +107,10 @@ describe('ConversationOrchestrator', () => {
 
       const status = await orchestrator.getConversationStatus('test-conversation');
 
-      expect(status.state).toBeDefined();
-      expect(status.recommendations).toBeDefined();
-      expect(Array.isArray(status.recommendations)).toBe(true);
+      expect(status).not.toBeNull();
+      expect(status!.state).toBeDefined();
+      expect(status!.recommendations).toBeDefined();
+      expect(Array.isArray(status!.recommendations)).toBe(true);
     });
 
     it('should recommend retrieval when context is low', async () => {
@@ -121,13 +122,13 @@ describe('ConversationOrchestrator', () => {
       const status = await orchestrator.getConversationStatus('test-conversation');
 
       // Low usage should suggest retrieval
-      expect(status.recommendations.some(r => r.includes('retrieving'))).toBe(true);
+      expect(status).not.toBeNull();
+      expect(status!.recommendations.some(r => r.includes('retrieving'))).toBe(true);
     });
 
-    it('should throw error for non-existent conversation', async () => {
-      await expect(
-        orchestrator.getConversationStatus('non-existent')
-      ).rejects.toThrow();
+    it('should return null for non-existent conversation', async () => {
+      const status = await orchestrator.getConversationStatus('non-existent');
+      expect(status).toBeNull();
     });
   });
 

@@ -182,11 +182,23 @@ export async function retrieveContext(
     filter.tags = { $in: tags };
   }
 
+  // Use projection to only fetch needed fields
   return collection
     .find(filter)
+    .project({
+      memories: 1,
+      timestamp: 1,
+      relevanceScore: 1,
+      tags: 1,
+      wordCount: 1,
+      llm: 1,
+      userId: 1,
+      conversationId: 1,
+      contextType: 1,
+    })
     .sort({ relevanceScore: -1, timestamp: -1 })
     .limit(limit)
-    .toArray();
+    .toArray() as Promise<Memory[]>;
 }
 
 export async function scoreRelevance(
@@ -285,22 +297,46 @@ export async function getConversationSummaries(
 ): Promise<Memory[]> {
   await connect();
 
+  // Use projection to only fetch needed fields for summaries
   return collection
     .find({ conversationId, contextType: "summary" })
+    .project({
+      summaryText: 1,
+      timestamp: 1,
+      wordCount: 1,
+      llm: 1,
+      userId: 1,
+      conversationId: 1,
+      contextType: 1,
+      memories: 1,
+    })
     .sort({ timestamp: -1 })
-    .toArray();
+    .toArray() as Promise<Memory[]>;
 }
 
 export async function searchContextByTags(tags: string[]): Promise<Memory[]> {
   await connect();
 
+  // Use projection to fetch only needed fields
   return collection
     .find({
       tags: { $in: tags },
       contextType: { $in: ["archived", "summary"] },
     })
+    .project({
+      memories: 1,
+      timestamp: 1,
+      relevanceScore: 1,
+      tags: 1,
+      wordCount: 1,
+      contextType: 1,
+      conversationId: 1,
+      summaryText: 1,
+      llm: 1,
+      userId: 1,
+    })
     .sort({ relevanceScore: -1, timestamp: -1 })
-    .toArray();
+    .toArray() as Promise<Memory[]>;
 }
 
 // Conversation state persistence functions

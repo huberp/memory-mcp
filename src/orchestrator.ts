@@ -248,7 +248,7 @@ export class ConversationOrchestrator {
     llm: string,
     userId?: string,
   ): Promise<void> {
-    const state = this.conversations.get(conversationId);
+    const state = this.getConversationState(conversationId);
     if (!state) throw new Error(`Conversation ${conversationId} not found`);
 
     // Get archived items to summarize
@@ -271,14 +271,22 @@ export class ConversationOrchestrator {
   }
 
   /**
+   * Get conversation state safely
+   * Returns null if conversation not found instead of throwing
+   */
+  private getConversationState(conversationId: string): ConversationState | null {
+    return this.conversations.get(conversationId) || null;
+  }
+
+  /**
    * Get conversation state and recommendations
    */
   async getConversationStatus(conversationId: string): Promise<{
     state: ConversationState;
     recommendations: string[];
-  }> {
-    const state = this.conversations.get(conversationId);
-    if (!state) throw new Error(`Conversation ${conversationId} not found`);
+  } | null> {
+    const state = this.getConversationState(conversationId);
+    if (!state) return null; // Return null instead of throwing
 
     const usageRatio = state.totalWordCount / state.maxWordCount;
     const recommendations: string[] = [];
