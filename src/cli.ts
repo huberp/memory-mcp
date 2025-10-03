@@ -83,8 +83,12 @@ class ConversationCLI {
           default:
             console.log("❌ Unknown command. Type 'help' for available commands.");
         }
-      } catch (error: any) {
-        console.error("❌ Error:", error.message);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          console.error("❌ Error:", error.message);
+        } else {
+          console.error("❌ Unknown error:", error);
+        }
       }
 
       this.promptUser();
@@ -176,8 +180,12 @@ class ConversationCLI {
         this.llm,
       );
       console.log("✅ Summary created successfully");
-    } catch (error: any) {
-      console.error("❌ Failed to create summary:", error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("❌ Failed to create summary:", error.message);
+      } else {
+        console.error("❌ Failed to create summary:", error);
+      }
     }
   }
 

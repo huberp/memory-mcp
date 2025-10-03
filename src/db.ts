@@ -1,11 +1,12 @@
 import { MongoClient, ObjectId, Db, Collection } from "mongodb";
 import { Memory, ContextType, ConversationState } from "./types.js";
 import { validateStringArray, validateTags, validateConversationId, sanitizeInput } from "./validation.js";
+import { config } from "./config.js";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const DATABASE_NAME = "memory_mcp";
-const COLLECTION_NAME = "memories";
-const STATE_COLLECTION_NAME = "conversation_states";
+const MONGODB_URI = config.mongodb.uri;
+const DATABASE_NAME = config.mongodb.database;
+const COLLECTION_NAME = config.mongodb.collection;
+const STATE_COLLECTION_NAME = config.mongodb.stateCollection;
 
 let client: MongoClient;
 let db: Db;
@@ -73,11 +74,11 @@ export async function connect() {
     // Validate MongoDB URI before connecting
     validateMongoUri(MONGODB_URI);
     
-    // Configure connection with timeouts
+    // Configure connection with timeouts from config
     const options = {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: config.mongodb.serverSelectionTimeoutMS,
+      connectTimeoutMS: config.mongodb.connectTimeoutMS,
+      socketTimeoutMS: config.mongodb.socketTimeoutMS,
     };
     
     client = new MongoClient(MONGODB_URI, options);

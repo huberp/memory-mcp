@@ -15,6 +15,7 @@ import {
   ArchiveDecision,
   RetrievalDecision,
 } from "./types.js";
+import { config } from "./config.js";
 
 function validateMongoUri(uri: string): void {
   if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -26,20 +27,17 @@ function validateMongoUri(uri: string): void {
   }
 }
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
+const MONGODB_URI = config.mongodb.uri;
 // Validate on module load
 validateMongoUri(MONGODB_URI);
 
-const DATABASE_NAME = "memory_mcp";
-const COLLECTION_NAME = "memories";
+const DATABASE_NAME = config.mongodb.database;
+const COLLECTION_NAME = config.mongodb.collection;
 
 export class ConversationOrchestrator {
   private conversations: Map<string, ConversationState> = new Map();
-  private readonly DEFAULT_MAX_WORDS = 8000; // Conservative limit
-  private readonly ARCHIVE_THRESHOLD = 0.8; // Archive when 80% full
-  private readonly RETRIEVE_THRESHOLD = 0.3; // Retrieve when 30% full
 
-  constructor(private maxWordCount: number = 8000) {}
+  constructor(private maxWordCount: number = config.orchestrator.maxWordCount) {}
 
   /**
    * Initialize or get a conversation state
@@ -119,12 +117,12 @@ export class ConversationOrchestrator {
   private async shouldArchive(state: ConversationState): Promise<ArchiveDecision> {
     const usageRatio = state.totalWordCount / state.maxWordCount;
 
-    if (usageRatio < this.ARCHIVE_THRESHOLD) {
+    if (usageRatio < config.orchestrator.archiveThreshold) {
       return { shouldArchive: false, messagesToArchive: [], tags: [], reason: "Below archive threshold" };
     }
 
-    // Archive oldest messages (first 30% of current context)
-    const messagesToArchive = state.currentContext.slice(0, Math.floor(state.currentContext.length * 0.3));
+    // Archive oldest messages (configurable percentage of current context)
+    const messagesToArchive = state.currentContext.slice(0, Math.floor(state.currentContext.length * config.orchestrator.archivePercentage));
     const tags = this.generateTags(messagesToArchive);
 
     return {
@@ -141,7 +139,7 @@ export class ConversationOrchestrator {
   private async shouldRetrieve(state: ConversationState): Promise<RetrievalDecision> {
     const usageRatio = state.totalWordCount / state.maxWordCount;
 
-    if (usageRatio > this.RETRIEVE_THRESHOLD) {
+    if (usageRatio > config.orchestrator.retrieveThreshold) {
       return { shouldRetrieve: false, contextToRetrieve: [], reason: "Above retrieve threshold" };
     }
 
@@ -153,8 +151,8 @@ export class ConversationOrchestrator {
     const relevantContext = await retrieveContext(
       state.conversationId,
       undefined, // no tag filter
-      0.2, // minimum relevance score
-      5, // limit to 5 items
+      config.orchestrator.minRelevanceScore,
+      config.orchestrator.retrieveLimit,
     );
 
     if (relevantContext.length === 0) {
@@ -285,15 +283,15 @@ export class ConversationOrchestrator {
     const usageRatio = state.totalWordCount / state.maxWordCount;
     const recommendations: string[] = [];
 
-    if (usageRatio > 0.9) {
+    if (usageRatio > config.orchestrator.recommendationHighUsage) {
       recommendations.push("⚠️ Context window nearly full - consider archiving more content");
-    } else if (usageRatio > 0.7) {
+    } else if (usageRatio > config.orchestrator.recommendationMediumUsage) {
       recommendations.push("📝 Consider archiving older messages to free up space");
-    } else if (usageRatio < 0.2) {
+    } else if (usageRatio < config.orchestrator.recommendationLowUsage) {
       recommendations.push("🔍 Context window has space - consider retrieving relevant archived content");
     }
 
-    if (state.archivedContext.length > 20) {
+    if (state.archivedContext.length > config.orchestrator.summaryThreshold) {
       recommendations.push("📋 Consider creating summaries of archived content");
     }
 
