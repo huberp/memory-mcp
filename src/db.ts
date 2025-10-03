@@ -9,12 +9,54 @@ let client: MongoClient;
 let db: Db;
 let collection: Collection<Memory>;
 
+function validateMongoUri(uri: string): void {
+  if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+    throw new Error('Invalid MongoDB connection string format');
+  }
+  // Warn if using default insecure connection
+  if (uri === 'mongodb://localhost:27017') {
+    console.warn('⚠️  Using default MongoDB connection without authentication');
+  }
+}
+
+async function createIndexes() {
+  if (!collection) return;
+  
+  // Compound index for common query patterns
+  await collection.createIndex(
+    { conversationId: 1, contextType: 1, relevanceScore: -1 },
+    { background: true }
+  );
+  
+  // Index for tag searches
+  await collection.createIndex(
+    { tags: 1, contextType: 1 },
+    { background: true }
+  );
+  
+  // Index for timestamp sorting
+  await collection.createIndex(
+    { timestamp: -1 },
+    { background: true }
+  );
+  
+  console.error('✅ Database indexes created');
+}
+
 export async function connect() {
   if (client && db && collection) return;
+  
+  // Validate MongoDB URI before connecting
+  validateMongoUri(MONGODB_URI);
+  
   client = new MongoClient(MONGODB_URI);
   await client.connect();
   db = client.db(DATABASE_NAME);
   collection = db.collection(COLLECTION_NAME);
+  
+  // Create indexes on first connection
+  await createIndexes();
+  
   return collection;
 }
 
@@ -114,7 +156,7 @@ export async function scoreRelevance(
 
   // Simple keyword overlap scoring
   const currentWords = new Set(currentContext.toLowerCase().split(/\s+/));
-  let scoredCount = 0;
+  const bulkOps = [];
 
   for (const item of archivedItems) {
     const itemText = item.memories.join(" ");
@@ -128,13 +170,21 @@ export async function scoreRelevance(
 
     const relevanceScore = intersection.size / union.size;
 
-    // Update the item with new relevance score
-    await collection.updateOne({ _id: item._id }, { $set: { relevanceScore } });
-
-    scoredCount++;
+    // Queue update instead of executing immediately
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: item._id },
+        update: { $set: { relevanceScore } }
+      }
+    });
   }
 
-  return scoredCount;
+  // Execute all updates in a single batch
+  if (bulkOps.length > 0) {
+    await collection.bulkWrite(bulkOps);
+  }
+
+  return bulkOps.length;
 }
 
 export async function createSummary(

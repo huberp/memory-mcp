@@ -13,7 +13,20 @@ import {
   RetrievalDecision,
 } from "./types.js";
 
+function validateMongoUri(uri: string): void {
+  if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+    throw new Error('Invalid MongoDB connection string format');
+  }
+  // Warn if using default insecure connection
+  if (uri === 'mongodb://localhost:27017') {
+    console.warn('⚠️  Using default MongoDB connection without authentication');
+  }
+}
+
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
+// Validate on module load
+validateMongoUri(MONGODB_URI);
+
 const DATABASE_NAME = "memory_mcp";
 const COLLECTION_NAME = "memories";
 
