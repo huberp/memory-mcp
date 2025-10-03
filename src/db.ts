@@ -210,7 +210,7 @@ export async function checkDatabaseHealth(): Promise<{
     status: pingResult.ok === 1 ? 'healthy' : 'unhealthy',
     timestamp: new Date().toISOString(),
     database: 'connected',
-    connected: client && client.topology ? client.topology.isConnected() : false,
+    connected: !!client,
   };
 }
 
