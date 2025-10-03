@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { ConversationOrchestrator } from "./orchestrator.js";
-import { connect } from "./db.js";
+import { connect, closeDatabase } from "./db.js";
 import readline from "readline";
 
 const rl = readline.createInterface({
@@ -78,7 +78,7 @@ class ConversationCLI {
           case "quit":
           case "exit":
             console.log("👋 Goodbye!");
-            rl.close();
+            await this.cleanup();
             return;
           default:
             console.log("❌ Unknown command. Type 'help' for available commands.");
@@ -219,8 +219,37 @@ class ConversationCLI {
     await this.orchestrator.initializeConversation(conversationId, this.llm);
     console.log(`🔄 Switched to conversation: ${conversationId}`);
   }
+
+  /**
+   * Clean up resources before exiting
+   */
+  private async cleanup() {
+    rl.close();
+    await closeDatabase();
+    process.exit(0);
+  }
 }
 
 // Start the CLI
 const cli = new ConversationCLI();
+
+// Handle graceful shutdown on readline close
+rl.on('close', async () => {
+  console.log('\n👋 Goodbye!');
+  await closeDatabase();
+  process.exit(0);
+});
+
+// Handle SIGINT (Ctrl+C)
+process.on('SIGINT', async () => {
+  console.log('\n\n⚠️  Shutting down gracefully...');
+  rl.close();
+});
+
+// Handle SIGTERM
+process.on('SIGTERM', async () => {
+  console.log('\n\n⚠️  Shutting down gracefully...');
+  rl.close();
+});
+
 cli.start().catch(console.error);

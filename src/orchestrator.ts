@@ -27,12 +27,8 @@ function validateMongoUri(uri: string): void {
   }
 }
 
-const MONGODB_URI = config.mongodb.uri;
-// Validate on module load
-validateMongoUri(MONGODB_URI);
-
-const DATABASE_NAME = config.mongodb.database;
-const COLLECTION_NAME = config.mongodb.collection;
+// Validate MongoDB URI on module load
+validateMongoUri(config.mongodb.uri);
 
 export class ConversationOrchestrator {
   private conversations: Map<string, ConversationState> = new Map();
