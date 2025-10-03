@@ -16,6 +16,7 @@ import {
   RetrievalDecision,
 } from "./types.js";
 import { config } from "./config.js";
+import { logger } from "./logger.js";
 
 function validateMongoUri(uri: string): void {
   if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -23,19 +24,17 @@ function validateMongoUri(uri: string): void {
   }
   // Warn if using default insecure connection
   if (uri === 'mongodb://localhost:27017') {
-    console.warn('⚠️  Using default MongoDB connection without authentication');
+    logger.warn('Using default MongoDB connection without authentication');
   }
 }
 
-const MONGODB_URI = config.mongodb.uri;
-// Validate on module load
-validateMongoUri(MONGODB_URI);
-
-const DATABASE_NAME = config.mongodb.database;
-const COLLECTION_NAME = config.mongodb.collection;
+// Validate MongoDB URI on module load
+validateMongoUri(config.mongodb.uri);
 
 export class ConversationOrchestrator {
   private conversations: Map<string, ConversationState> = new Map();
+  private wordCountCache: Map<string, number> = new Map();
+  private static readonly MAX_CACHE_SIZE = 1000;
 
   constructor(private maxWordCount: number = config.orchestrator.maxWordCount) {}
 
@@ -198,12 +197,12 @@ export class ConversationOrchestrator {
       // Save updated state to database
       await saveConversationState(state);
 
-      console.log(`Archived ${archivedCount} messages for conversation ${state.conversationId}`);
+      logger.info(`Archived ${archivedCount} messages for conversation ${state.conversationId}`);
     } catch (error) {
       // Rollback state on failure
       state.currentContext = originalContext;
       state.totalWordCount = originalWordCount;
-      console.error(`Failed to archive messages for conversation ${state.conversationId}:`, error);
+      logger.error(`Failed to archive messages for conversation ${state.conversationId}:`, error);
       throw error;
     }
   }
@@ -229,12 +228,12 @@ export class ConversationOrchestrator {
       // Save updated state to database
       await saveConversationState(state);
 
-      console.log(`Retrieved ${decision.contextToRetrieve.length} items for conversation ${state.conversationId}`);
+      logger.info(`Retrieved ${decision.contextToRetrieve.length} items for conversation ${state.conversationId}`);
     } catch (error) {
       // Rollback state on failure
       state.currentContext = originalContext;
       state.totalWordCount = originalWordCount;
-      console.error(`Failed to retrieve context for conversation ${state.conversationId}:`, error);
+      logger.error(`Failed to retrieve context for conversation ${state.conversationId}:`, error);
       throw error;
     }
   }
@@ -267,7 +266,7 @@ export class ConversationOrchestrator {
       userId,
     );
 
-    console.log(`Created summary ${summaryId} for conversation ${conversationId}`);
+    logger.info(`Created summary ${summaryId} for conversation ${conversationId}`);
   }
 
   /**
@@ -313,16 +312,23 @@ export class ConversationOrchestrator {
     const allText = messages.join(" ").toLowerCase();
     const tags: string[] = [];
 
-    // Simple keyword-based tagging
-    const keywords = [
-      "code", "programming", "technical", "api", "database", "frontend", "backend",
-      "design", "ui", "ux", "user", "interface", "data", "analysis", "research",
-      "writing", "content", "creative", "business", "strategy", "planning",
-    ];
+    // Use word boundaries for better matching
+    const keywords = {
+      programming: /\b(code|coding|programming|developer|software)\b/,
+      technical: /\b(technical|api|database|server|client)\b/,
+      frontend: /\b(frontend|ui|ux|interface|design)\b/,
+      backend: /\b(backend|api|database|server)\b/,
+      data: /\b(data|analysis|analytics|visualization)\b/,
+      research: /\b(research|study|investigation|analysis)\b/,
+      writing: /\b(writing|content|article|blog)\b/,
+      creative: /\b(creative|design|art|graphics)\b/,
+      business: /\b(business|strategy|planning|management)\b/,
+    };
 
-    for (const keyword of keywords) {
-      if (allText.includes(keyword)) {
-        tags.push(keyword);
+    // Check each category
+    for (const [tag, pattern] of Object.entries(keywords)) {
+      if (pattern.test(allText)) {
+        tags.push(tag);
       }
     }
 
@@ -339,7 +345,20 @@ export class ConversationOrchestrator {
    * Get word count of text
    */
   private getWordCount(text: string): number {
-    return text.split(/\s+/).length;
+    // Check cache first
+    if (this.wordCountCache.has(text)) {
+      return this.wordCountCache.get(text)!;
+    }
+
+    // Calculate word count, filtering empty strings
+    const count = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+
+    // Add to cache if not too large
+    if (this.wordCountCache.size < ConversationOrchestrator.MAX_CACHE_SIZE) {
+      this.wordCountCache.set(text, count);
+    }
+
+    return count;
   }
 
   /**
