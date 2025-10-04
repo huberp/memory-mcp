@@ -1,0 +1,52 @@
+# Node modules
+node_modules/
+npm-debug.log*
+
+# Build artifacts
+build/
+dist/
+
+# Test files
+src/__tests__/
+coverage/
+*.test.ts
+*.test.js
+
+# Development files
+.git/
+.gitignore
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (keep essential docs)
+*.md
+!README.md
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# CI/CD
+.github/
+
+# TypeScript
+*.tsbuildinfo
+
+# Jest
+jest.config.js
