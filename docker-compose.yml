@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:6.0
+    container_name: memory-mcp-mongodb
+    restart: unless-stopped
+    # Uncomment to enable authentication in production
+    # environment:
+    #   MONGO_INITDB_ROOT_USERNAME: admin
+    #   MONGO_INITDB_ROOT_PASSWORD: changeme
+    volumes:
+      - mongodb-data:/data/db
+    ports:
+      # Expose MongoDB port for debugging (optional)
+      - "27017:27017"
+    networks:
+      - memory-mcp-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # MCP Server
+  memory-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memory-mcp-server
+    restart: unless-stopped
+    environment:
+      # MongoDB connection
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: memory_mcp
+      MONGODB_COLLECTION: memories
+      MONGODB_STATE_COLLECTION: conversation_states
+      
+      # Connection timeouts
+      MONGODB_SERVER_SELECTION_TIMEOUT: "5000"
+      MONGODB_CONNECT_TIMEOUT: "10000"
+      MONGODB_SOCKET_TIMEOUT: "45000"
+      
+      # Orchestrator configuration
+      MAX_WORD_COUNT: "8000"
+      ARCHIVE_THRESHOLD: "0.8"
+      RETRIEVE_THRESHOLD: "0.3"
+      ARCHIVE_PERCENTAGE: "0.3"
+      
+      # Validation configuration
+      MAX_INPUT_LENGTH: "10000"
+      MAX_ARRAY_ITEMS: "100"
+      
+      # Logging
+      LOG_LEVEL: info
+      NODE_ENV: production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - memory-mcp-network
+    # Uncomment to expose MCP server port if needed
+    # ports:
+    #   - "3000:3000"
+    stdin_open: true
+    tty: true
+
+volumes:
+  # Persistent volume for MongoDB data
+  mongodb-data:
+    driver: local
+
+networks:
+  memory-mcp-network:
+    driver: bridge

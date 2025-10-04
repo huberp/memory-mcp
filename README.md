@@ -63,6 +63,82 @@ npm install
 npm run build
 ```
 
+## Docker Deployment (Quick Start)
+
+The easiest way to run memory-mcp is using Docker with the included docker-compose setup.
+
+### Prerequisites
+
+- Docker (20.10+)
+- Docker Compose (v2.0+)
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/huberp/memory-mcp.git
+cd memory-mcp
+
+# Start all services (MCP server + MongoDB)
+docker compose up -d
+
+# View logs
+docker compose logs -f memory-mcp
+
+# Check status
+docker compose ps
+```
+
+Your MCP server is now running with persistent MongoDB storage!
+
+### Docker Architecture
+
+The setup includes:
+- **memory-mcp**: The MCP server application
+- **mongodb**: MongoDB 6.0 database
+- **mongodb-data**: Named volume for persistent storage
+
+Data persists across container restarts automatically.
+
+### Customizing Configuration
+
+Create a `.env` file from the example:
+
+```bash
+cp .env.example .env
+# Edit .env with your settings
+```
+
+Or modify environment variables directly in `docker-compose.yml`.
+
+### Common Docker Commands
+
+```bash
+# Stop services (data persists)
+docker compose down
+
+# Stop and remove all data
+docker compose down -v
+
+# Restart services
+docker compose restart
+
+# View MongoDB data
+docker compose exec mongodb mongosh
+
+# Backup MongoDB data
+docker compose exec mongodb mongodump --out=/data/backup
+```
+
+### Troubleshooting Docker
+
+- **Connection refused**: Wait ~30 seconds for MongoDB health check
+- **Data lost**: Don't use `-v` flag unless you want to delete data
+- **Port conflicts**: Modify ports in docker-compose.yml if 27017 is in use
+- **Build failures**: Run `docker compose build --no-cache`
+
+For advanced deployment options, see [Production Deployment](#production-deployment).
+
 ## Configuration
 
 All configuration can be set via environment variables. Create a `.env` file or export these variables:
@@ -516,24 +592,86 @@ LOG_LEVEL="warn"
 
 ### Deployment Options
 
-#### Option 1: Docker
+#### Option 1: Docker (Recommended)
 
-```dockerfile
-FROM node:18-alpine
+The repository includes complete Docker support with Docker Compose for easy deployment.
 
-WORKDIR /app
+**Quick Start:**
 
-COPY package*.json ./
-RUN npm ci --only=production
+```bash
+# Start all services (MCP server + MongoDB)
+docker-compose up -d
 
-COPY . .
-RUN npm run build
+# View logs
+docker-compose logs -f memory-mcp
 
-ENV NODE_ENV=production
-ENV MONGODB_URI=mongodb://mongo:27017
+# Check status
+docker-compose ps
 
-CMD ["node", "build/index.js"]
+# Stop services (data persists)
+docker-compose down
+
+# Stop and remove all data
+docker-compose down -v
 ```
+
+**What's Included:**
+
+- **Dockerfile**: Multi-stage build for optimized image size
+- **docker-compose.yml**: Complete orchestration with MongoDB
+- **Persistent Storage**: MongoDB data stored in named volume `mongodb-data`
+- **Health Checks**: Automatic service health monitoring
+- **Environment Variables**: Pre-configured with sensible defaults
+
+**Architecture:**
+
+The Docker setup uses separate containers:
+- `memory-mcp`: The MCP server application
+- `mongodb`: MongoDB 6.0 database for persistent storage
+
+**Customizing Configuration:**
+
+Create a `.env` file or modify environment variables in `docker-compose.yml`:
+
+```bash
+# Example .env file
+MONGODB_URI=mongodb://mongodb:27017
+MONGODB_DATABASE=memory_mcp
+MAX_WORD_COUNT=16000
+ARCHIVE_THRESHOLD=0.85
+LOG_LEVEL=warn
+```
+
+**Data Persistence:**
+
+MongoDB data is stored in a Docker volume and persists across container restarts:
+
+```bash
+# Backup MongoDB data
+docker-compose exec mongodb mongodump --out=/data/backup
+
+# List volumes
+docker volume ls
+
+# Inspect the data volume
+docker volume inspect memory-mcp_mongodb-data
+```
+
+**Production Deployment:**
+
+For production, consider:
+1. Enable MongoDB authentication (uncomment in docker-compose.yml)
+2. Use strong passwords
+3. Configure SSL/TLS for MongoDB connections
+4. Set `LOG_LEVEL=warn` or `LOG_LEVEL=error`
+5. Regular backups of the MongoDB volume
+
+**Troubleshooting Docker:**
+
+- **Connection refused**: Wait for MongoDB to be ready (health check runs automatically)
+- **Data lost**: Ensure you didn't use `docker-compose down -v` which removes volumes
+- **Port conflicts**: If port 27017 is in use, modify the ports in docker-compose.yml
+- **Build failures**: Run `docker-compose build --no-cache` to rebuild from scratch
 
 #### Option 2: Cloud Platforms
 
