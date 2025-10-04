@@ -1,0 +1,38 @@
+services:
+  # MongoDB Database for testing
+  mongodb:
+    image: mongo:6.0
+    container_name: memory-mcp-mongodb-test
+    networks:
+      - test-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # MCP Server for testing (with mcp-cli included)
+  memory-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: memory-mcp-server-test
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: memory_mcp
+      MONGODB_COLLECTION: memories
+      MONGODB_STATE_COLLECTION: conversation_states
+      LOG_LEVEL: info
+      NODE_ENV: test
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - test-network
+    stdin_open: true
+    tty: true
+
+networks:
+  test-network:
+    driver: bridge

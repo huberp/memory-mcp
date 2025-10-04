@@ -2,9 +2,9 @@
 node_modules/
 npm-debug.log*
 
-# Build artifacts
-build/
-dist/
+# Build artifacts (commented out - we need build/ for Docker)
+# build/
+# dist/
 
 # Test files
 src/__tests__/

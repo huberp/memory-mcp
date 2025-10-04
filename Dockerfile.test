@@ -1,0 +1,32 @@
+# Testing Dockerfile - includes mcp-cli for running tests
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files first
+COPY package*.json ./
+
+# Install production dependencies for running the MCP server
+# Use npm install since npm ci has issues in this environment
+RUN npm install --omit=dev --no-audit --no-fund --strict-ssl=false || \
+    npm install --production --no-audit --no-fund --strict-ssl=false
+
+# Copy the entire project including built files
+COPY . .
+
+# Ensure build directory exists (in case .dockerignore excluded it)
+# We expect the build to be done before building this image
+RUN if [ ! -d "build" ]; then echo "ERROR: build directory not found!" && exit 1; fi
+
+# Install mcp-cli globally for testing
+# Use strict-ssl=false to work around certificate issues in CI environments
+RUN npm install -g @wong2/mcp-cli --no-audit --no-fund --strict-ssl=false
+
+# Set environment variables
+ENV NODE_ENV=test
+ENV MONGODB_URI=mongodb://mongodb:27017
+ENV MONGODB_DATABASE=memory_mcp
+ENV LOG_LEVEL=info
+
+# Keep container running for tests
+CMD ["tail", "-f", "/dev/null"]
