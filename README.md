@@ -229,6 +229,8 @@ Conversation states are automatically persisted to MongoDB:
 
 ## Testing
 
+### Unit Tests
+
 Run the test suite:
 
 ```bash
@@ -243,6 +245,36 @@ npm run test:coverage
 ```
 
 The project includes comprehensive unit tests with ~37% code coverage.
+
+### MCP Server Testing
+
+The MCP server is tested using [wong2/mcp-cli](https://github.com/wong2/mcp-cli) for automated integration testing.
+
+```bash
+# Install mcp-cli globally
+npm install -g @wong2/mcp-cli
+
+# List available MCP tools
+mcp-cli list-tools node build/index.js
+
+# Test health check tool
+mcp-cli call-tool node build/index.js health-check '{}'
+
+# Run comprehensive MCP tests
+node test-mcp-server.mjs
+```
+
+For detailed MCP testing instructions, see [MCP_TESTING_GUIDE.md](MCP_TESTING_GUIDE.md).
+
+### GitHub Actions
+
+The project includes automated testing via GitHub Actions that runs on every push and pull request:
+- Unit tests (Jest)
+- MCP server integration tests (mcp-cli)
+- MongoDB connectivity tests
+- Build verification
+
+View test results in the **Actions** tab of the repository.
 
 ## Usage
 
