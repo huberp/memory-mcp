@@ -26,6 +26,13 @@ export interface OrchestratorConfig {
   recommendationLowUsage: number;
 }
 
+export interface ScorerConfig {
+  type: 'keyword' | 'sbert' | 'custom';
+  sbertModel?: string;
+  sbertServiceUrl?: string;
+  sbertTimeout?: number;
+}
+
 export interface ValidationConfig {
   maxInputLength: number;
   maxArrayItems: number;
@@ -40,6 +47,7 @@ export interface AppConfig {
   mongodb: MongoDBConfig;
   orchestrator: OrchestratorConfig;
   validation: ValidationConfig;
+  scorer: ScorerConfig;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
 
@@ -77,6 +85,12 @@ export function loadConfig(): AppConfig {
       maxConversationIdLength: parseInt(process.env.MAX_CONVERSATION_ID_LENGTH || '256'),
       maxLlmNameLength: parseInt(process.env.MAX_LLM_NAME_LENGTH || '100'),
       maxUserIdLength: parseInt(process.env.MAX_USER_ID_LENGTH || '256'),
+    },
+    scorer: {
+      type: (process.env.RELEVANCE_SCORER_TYPE as any) || 'keyword',
+      sbertModel: process.env.SBERT_MODEL || 'all-MiniLM-L6-v2',
+      sbertServiceUrl: process.env.SBERT_SERVICE_URL,
+      sbertTimeout: process.env.SBERT_TIMEOUT ? parseInt(process.env.SBERT_TIMEOUT) : 30000,
     },
     logLevel: (process.env.LOG_LEVEL as any) || 'info',
   };
