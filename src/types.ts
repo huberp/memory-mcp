@@ -18,6 +18,8 @@ export interface Memory {
   messageIndex?: number; // Order within conversation
   wordCount?: number;
   summaryText?: string;
+  // Semantic scoring fields
+  embedding?: number[]; // Vector embedding for semantic similarity
 }
 
 // Orchestration types

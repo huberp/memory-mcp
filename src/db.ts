@@ -3,6 +3,7 @@ import { Memory, ContextType, ConversationState } from "./types.js";
 import { validateStringArray, validateTags, validateConversationId, sanitizeInput } from "./validation.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
+import { ScorerFactory } from "./scorers/index.js";
 
 const MONGODB_URI = config.mongodb.uri;
 const DATABASE_NAME = config.mongodb.database;
@@ -14,6 +15,9 @@ let db: Db;
 let collection: Collection<Memory>;
 let stateCollection: Collection<any>;
 let connectionPromise: Promise<void> | null = null;
+
+// Initialize the relevance scorer based on configuration
+const scorer = ScorerFactory.createScorerFromEnv();
 
 function validateMongoUri(uri: string): void {
   if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -325,7 +329,7 @@ export async function retrieveContext(
 
 /**
  * Score the relevance of archived context against current conversation context
- * Uses Jaccard similarity (word overlap) to calculate relevance scores
+ * Uses the configured relevance scorer (keyword, SBERT, or custom)
  * @param conversationId - Unique identifier for the conversation
  * @param currentContext - Current conversation context to compare against
  * @param llm - Name of the LLM
@@ -356,37 +360,33 @@ export async function scoreRelevance(
 
   if (archivedItems.length === 0) return 0;
 
-  // Simple keyword overlap scoring
-  const currentWords = new Set(currentContext.toLowerCase().split(/\s+/));
-  const bulkOps = [];
+  try {
+    // Use the configured scorer to score relevance
+    const scoredMemories = await scorer.scoreRelevance(currentContext, archivedItems);
 
-  for (const item of archivedItems) {
-    const itemText = item.memories.join(" ");
-    const itemWords = new Set(itemText.toLowerCase().split(/\s+/));
-
-    // Calculate overlap
-    const intersection = new Set(
-      [...currentWords].filter((x) => itemWords.has(x)),
-    );
-    const union = new Set([...currentWords, ...itemWords]);
-
-    const relevanceScore = intersection.size / union.size;
-
-    // Queue update instead of executing immediately
-    bulkOps.push({
+    // Update all scores in a single batch operation
+    const bulkOps = scoredMemories.map((memory) => ({
       updateOne: {
-        filter: { _id: item._id },
-        update: { $set: { relevanceScore } }
+        filter: { _id: memory._id },
+        update: { 
+          $set: { 
+            relevanceScore: memory.relevanceScore,
+            // Update embedding if available (for SBERT)
+            ...(memory.embedding && { embedding: memory.embedding })
+          } 
+        }
       }
-    });
-  }
+    }));
 
-  // Execute all updates in a single batch
-  if (bulkOps.length > 0) {
-    await collection.bulkWrite(bulkOps);
-  }
+    if (bulkOps.length > 0) {
+      await collection.bulkWrite(bulkOps);
+    }
 
-  return bulkOps.length;
+    return bulkOps.length;
+  } catch (error) {
+    logger.error(`Error scoring relevance: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
+  }
 }
 
 /**
